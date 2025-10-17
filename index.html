@@ -102,6 +102,16 @@
             background-color: #5a6268;
         }
 
+        /* New styles for function buttons (sqrt, percent) */
+        .calculator-grid .function {
+            background-color: #17a2b8; /* A nice info blue */
+            color: #fff;
+        }
+
+        .calculator-grid .function:hover {
+            background-color: #138496;
+        }
+
         .calculator-grid .zero {
             grid-column: span 2;
         }
@@ -112,26 +122,28 @@
         <input type="text" id="display" readonly value="0">
         <div class="calculator-grid">
             <button class="clear" id="clear">C</button>
+            <button class="function" id="sqrt">√</button>
+            <button class="function" id="percent">%</button>
             <button class="operator">/</button>
-            <button class="operator">*</button>
-            <button class="operator">-</button>
 
             <button class="number">7</button>
             <button class="number">8</button>
             <button class="number">9</button>
-            <button class="operator">+</button>
+            <button class="operator">*</button>
 
             <button class="number">4</button>
             <button class="number">5</button>
             <button class="number">6</button>
-            <button class="decimal" id="decimal">.</button>
+            <button class="operator">-</button>
 
             <button class="number">1</button>
             <button class="number">2</button>
             <button class="number">3</button>
-            <button class="equals" id="equals">=</button>
+            <button class="operator">+</button>
 
             <button class="number zero" id="zero">0</button>
+            <button class="decimal" id="decimal">.</button>
+            <button class="equals" id="equals">=</button>
         </div>
     </div>
 
@@ -229,6 +241,48 @@
             updateDisplay();
         }
 
+        function handleFunction(funcType) {
+            if (funcType === 'sqrt') {
+                const num = parseFloat(currentInput);
+                if (isNaN(num) || num < 0) {
+                    currentInput = "Error";
+                } else {
+                    currentInput = String(Math.sqrt(num));
+                }
+                previousInput = ''; // Reset previous operation context
+                operator = null;
+                awaitingNextOperand = true; // Next number should start a new input
+                updateDisplay();
+            } else if (funcType === '%') {
+                let num = parseFloat(currentInput);
+                if (isNaN(num)) {
+                    currentInput = "Error";
+                    updateDisplay();
+                    return;
+                }
+
+                if (operator === null) {
+                    // Case: "50 %" -> 0.5
+                    currentInput = String(num / 100);
+                } else {
+                    const prev = parseFloat(previousInput);
+                    if (isNaN(prev)) {
+                        // Fallback if previous is not a valid number, treat as simple percentage
+                        currentInput = String(num / 100);
+                    } else if (awaitingNextOperand) {
+                        // Case: "50 + %" -> 50 + (50 / 100)
+                        currentInput = String(prev / 100);
+                    } else {
+                        // Case: "50 + 10 %" -> 50 + (50 * 10 / 100)
+                        currentInput = String(prev * num / 100);
+                    }
+                    // After applying percentage, immediately calculate if an operator is pending
+                    calculate(); // This will use the modified currentInput
+                }
+                updateDisplay();
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             updateDisplay();
 
@@ -243,6 +297,10 @@
             document.getElementById('equals').addEventListener('click', calculate);
             document.getElementById('clear').addEventListener('click', clear);
             document.getElementById('decimal').addEventListener('click', () => appendNumber('.'));
+
+            // New function buttons
+            document.getElementById('sqrt').addEventListener('click', () => handleFunction('sqrt'));
+            document.getElementById('percent').addEventListener('click', () => handleFunction('%'));
         });
     </script>
 </body>
