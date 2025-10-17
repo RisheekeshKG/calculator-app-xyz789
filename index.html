@@ -100,6 +100,17 @@
             box-shadow: inset 2px 2px 5px rgba(255, 59, 48, 0.6), inset -2px -2px 5px rgba(255, 59, 48, 0.4);
         }
 
+        .buttons button.function { /* New style for function buttons like √ and % */
+            background-color: #d0d0d0; /* Slightly darker than numbers for distinction */
+            color: #333;
+            font-weight: bold;
+            box-shadow: 3px 3px 6px #b0b0b0, -3px -3px 6px #ffffff;
+        }
+        .buttons button.function:active {
+            box-shadow: inset 2px 2px 5px #b0b0b0, inset -2px -2px 5px #ffffff;
+        }
+
+
         .buttons button.empty {
             background-color: transparent;
             box-shadow: none;
@@ -137,8 +148,8 @@
             <button class="equals">=</button>
 
             <button class="number">0</button>
-            <button class="empty" disabled></button>
-            <button class="empty" disabled></button>
+            <button class="function">√</button> <!-- Square Root button -->
+            <button class="function">%</button> <!-- Percentage button -->
             <button class="empty" disabled></button>
         </div>
     </div>
@@ -153,14 +164,18 @@
         function updateDisplay() {
             // Limit display to a reasonable length to prevent overflow and maintain readability
             const maxDisplayLength = 12;
-            if (currentInput.length > maxDisplayLength) {
-                // If it's a decimal number, try to truncate it
+            if (currentInput === 'Error' || currentInput === 'NaN') {
+                display.value = 'Error';
+            } else if (currentInput.length > maxDisplayLength) {
+                // If it's a decimal number, try to truncate it or use scientific notation
                 if (currentInput.includes('.')) {
                     const [integerPart, decimalPart] = currentInput.split('.');
                     if (integerPart.length >= maxDisplayLength) {
                         display.value = parseFloat(currentInput).toExponential(5); // Fallback to scientific notation
                     } else {
-                        display.value = parseFloat(currentInput).toFixed(maxDisplayLength - integerPart.length - 1);
+                        // Truncate decimal part if integer part is short enough
+                        const remainingLength = maxDisplayLength - integerPart.length - 1; // -1 for the decimal point
+                        display.value = parseFloat(currentInput).toFixed(Math.max(0, remainingLength));
                     }
                 } else {
                     display.value = parseFloat(currentInput).toExponential(5); // Scientific notation for large integers
@@ -179,7 +194,7 @@
         }
 
         function inputNumber(num) {
-            if (currentInput === 'Error') { // Clear error state on new input
+            if (currentInput === 'Error' || currentInput === 'NaN') { // Clear error state on new input
                 clearAll();
             }
             if (waitingForSecondOperand) {
@@ -192,7 +207,7 @@
         }
 
         function inputDecimal() {
-            if (currentInput === 'Error') { // Clear error state on new input
+            if (currentInput === 'Error' || currentInput === 'NaN') { // Clear error state on new input
                 clearAll();
             }
             if (waitingForSecondOperand) {
@@ -208,7 +223,7 @@
         }
 
         function handleOperator(nextOperator) {
-            if (currentInput === 'Error') return; // Do nothing if in error state
+            if (currentInput === 'Error' || currentInput === 'NaN') return; // Do nothing if in error state
 
             const inputValue = parseFloat(currentInput);
 
@@ -224,7 +239,7 @@
             } else if (operator) {
                 // Perform the previous calculation if an operator was already set
                 const result = operate(parseFloat(previousInput), inputValue, operator);
-                if (result === 'Error') { // Handle division by zero or other errors
+                if (result === 'Error' || isNaN(result)) { // Handle division by zero or other errors
                     currentInput = 'Error';
                     updateDisplay();
                     return;
@@ -257,10 +272,10 @@
         }
 
         function calculateResult() {
-            if (currentInput === 'Error') return; // Do nothing if in error state
+            if (currentInput === 'Error' || currentInput === 'NaN') return; // Do nothing if in error state
             if (operator && !waitingForSecondOperand) {
                 const result = operate(parseFloat(previousInput), parseFloat(currentInput), operator);
-                if (result === 'Error') {
+                if (result === 'Error' || isNaN(result)) {
                     currentInput = 'Error';
                 } else {
                     currentInput = String(result);
@@ -271,13 +286,52 @@
                 updateDisplay();
             } else if (!operator && previousInput !== '') {
                 // If '=' is pressed after a result without new operator (e.g., 5 + 3 = 8, then = again)
-                // This will re-apply the last operation if previousInput and operator are still set.
-                // For a simple calculator, we just display currentInput.
-                // Or, if previousInput is set but operator is null, it means the last calculation
-                // already happened. Just keep currentInput.
+                // This means the last calculation already happened. Just keep currentInput.
                 waitingForSecondOperand = true; // Allow new input to clear display
                 updateDisplay();
             }
+        }
+
+        function handleSquareRoot() {
+            if (currentInput === 'Error' || currentInput === 'NaN') return;
+
+            const value = parseFloat(currentInput);
+            if (isNaN(value) || value < 0) {
+                currentInput = 'Error';
+            } else {
+                currentInput = String(Math.sqrt(value));
+            }
+            waitingForSecondOperand = true; // Next number replaces this result
+            updateDisplay();
+        }
+
+        function handlePercentage() {
+            if (currentInput === 'Error' || currentInput === 'NaN') return;
+
+            const currentValue = parseFloat(currentInput);
+            if (isNaN(currentValue)) {
+                currentInput = 'Error';
+                updateDisplay();
+                return;
+            }
+
+            if (operator && previousInput !== '') {
+                // Scenario: X operator Y % (e.g., 100 + 10%)
+                const prevValue = parseFloat(previousInput);
+                const percentageOfPrev = (prevValue * currentValue) / 100;
+
+                // Set currentInput to the calculated percentage value (e.g., 10 for 10% of 100)
+                currentInput = String(percentageOfPrev);
+
+                // Now, perform the pending operation (e.g., 100 + 10)
+                // This will use previousInput (100), operator (+), and currentInput (10)
+                calculateResult();
+            } else {
+                // Scenario: just Y % (e.g., 10%)
+                currentInput = String(currentValue / 100);
+            }
+            waitingForSecondOperand = true; // Next number replaces this result
+            updateDisplay();
         }
 
         document.querySelectorAll('.buttons button').forEach(button => {
@@ -292,6 +346,12 @@
                     clearAll();
                 } else if (button.classList.contains('equals')) {
                     calculateResult();
+                } else if (button.classList.contains('function')) { // Handler for new function buttons
+                    if (button.textContent === '√') {
+                        handleSquareRoot();
+                    } else if (button.textContent === '%') {
+                        handlePercentage();
+                    }
                 }
             });
         });
